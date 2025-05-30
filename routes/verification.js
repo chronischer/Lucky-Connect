@@ -2,6 +2,9 @@ const express = require('express');
 const axios = require("axios")
 const router = express.Router();
 
+const bans = process.env.BANNED_SERVERS?.split(',') || [];
+const allowedC = process.env.ALLOWED_COUNTRYCODES?.split(',') || [];
+
 const getip = (req) => {
   let ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress;
   if (ip && ip.includes('::ffff:')) {
@@ -12,6 +15,12 @@ const getip = (req) => {
   }
 
   return ip;
+}
+
+const ip2location = async (ip) => {
+    data = await axios.get(`http://ip-api.com/json/${ip}`)
+    if(allowedC.includes(data.data.countryCode)) return true
+    return false
 }
 
 const sendWebhook = (m, ip, bans) => {
@@ -46,8 +55,6 @@ const sendWebhook = (m, ip, bans) => {
 }).catch(console.error);
 }
 
-const bans = process.env.BANNED_SERVERS?.split(',') || [];
-
 const verifyBannedServers = async (token) => {
   try {
     const { data } = await axios.get("https://discord.com/api/v10/users/@me/guilds", {
@@ -75,8 +82,14 @@ try{
 
 router.get('/verification', async (req, res) => {
   const code = req.query.code;
+  const ip = getip(req)
+  allowed = await ip2location(ip)
+  
   if (!code) {
     return res.status(400).render('verification', { status: 'Código de verificação não encontrado! tente começar novamente pelo Discord.'});
+  }
+  if(!allowed){
+    return res.status(400).render('verification', { status: 'Uso de Proxy, VPN ou Rede Tor foi detectado.\nAcha que isso foi um engano? entre em contato com @validation. no Discord.'});
   }
 
   try {
@@ -102,7 +115,7 @@ router.get('/verification', async (req, res) => {
     
     const bans = await verifyBannedServers(access_token)
     const user = userInfo.data;
-    await sendWebhook(user, getip(req), bans)
+    await sendWebhook(user, ip, bans)
     await verifyMember(process.env.SERVER_ID, user.id, process.env.ROLE_ID)
     return res.status(200).render('verification', { status: 'Verificado com Sucesso! você pode fechar essa pagina.' });
   } catch (err) {

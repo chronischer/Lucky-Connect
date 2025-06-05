@@ -80,6 +80,11 @@ try{
 }
 }
 
+router.get('/ping', async (req, res) => {
+    return res.status(200).render('verification', { status: '🏓 Pong'});
+  }
+})
+
 router.get('/verification', async (req, res) => {
   const code = req.query.code;
   const ip = getip(req)
